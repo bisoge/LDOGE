@@ -71,6 +71,8 @@ int ECDSA_SIG_recover_key_GFp(EC_KEY *eckey, ECDSA_SIG *ecsig, const unsigned ch
     EC_POINT *Q = NULL;
     BIGNUM *rr = NULL;
     BIGNUM *zero = NULL;
+    const BIGNUM *sigr = NULL;
+    const BIGNUM *sigs = NULL;
     int n = 0;
     int i = recid / 2;
 
@@ -82,7 +84,8 @@ int ECDSA_SIG_recover_key_GFp(EC_KEY *eckey, ECDSA_SIG *ecsig, const unsigned ch
     x = BN_CTX_get(ctx);
     if (!BN_copy(x, order)) { ret=-1; goto err; }
     if (!BN_mul_word(x, i)) { ret=-1; goto err; }
-    if (!BN_add(x, x, ecsig->r)) { ret=-1; goto err; }
+    ECDSA_SIG_get0(ecsig, &sigr, &sigs);
+    if (!BN_add(x, x, sigr)) { ret=-1; goto err; }
     field = BN_CTX_get(ctx);
     if (!EC_GROUP_get_curve_GFp(group, field, NULL, NULL, ctx)) { ret=-2; goto err; }
     if (BN_cmp(x, field) >= 0) { ret=0; goto err; }
@@ -103,9 +106,9 @@ int ECDSA_SIG_recover_key_GFp(EC_KEY *eckey, ECDSA_SIG *ecsig, const unsigned ch
     if (!BN_zero(zero)) { ret=-1; goto err; }
     if (!BN_mod_sub(e, zero, e, order, ctx)) { ret=-1; goto err; }
     rr = BN_CTX_get(ctx);
-    if (!BN_mod_inverse(rr, ecsig->r, order, ctx)) { ret=-1; goto err; }
+    if (!BN_mod_inverse(rr, sigr, order, ctx)) { ret=-1; goto err; }
     sor = BN_CTX_get(ctx);
-    if (!BN_mod_mul(sor, ecsig->s, rr, order, ctx)) { ret=-1; goto err; }
+    if (!BN_mod_mul(sor, sigs, rr, order, ctx)) { ret=-1; goto err; }
     eor = BN_CTX_get(ctx);
     if (!BN_mod_mul(eor, e, rr, order, ctx)) { ret=-1; goto err; }
     if (!EC_POINT_mul(group, Q, eor, R, sor, ctx)) { ret=-2; goto err; }
@@ -149,11 +152,13 @@ public:
     }
 
     void SetSecretBytes(const unsigned char vch[32]) {
-        BIGNUM bn;
-        BN_init(&bn);
-        assert(BN_bin2bn(vch, 32, &bn));
-        assert(EC_KEY_regenerate_key(pkey, &bn));
-        BN_clear_free(&bn);
+        BN_CTX *ctx = BN_CTX_new();
+        BN_CTX_start(ctx);
+        BIGNUM *bn = BN_CTX_get(ctx);
+        assert(BN_bin2bn(vch, 32, bn));
+        assert(EC_KEY_regenerate_key(pkey, bn));
+        BN_CTX_end(ctx);
+        BN_CTX_free(ctx);
     }
 
     void GetPrivKey(CPrivKey &privkey, bool fCompressed) {
@@ -209,9 +214,14 @@ public:
         BIGNUM *halforder = BN_CTX_get(ctx);
         EC_GROUP_get_order(group, order, ctx);
         BN_rshift1(halforder, order);
-        if (BN_cmp(sig->s, halforder) > 0) {
+        const BIGNUM *sigr = NULL;
+        const BIGNUM *sigs = NULL;
+        ECDSA_SIG_get0(sig, &sigr, &sigs);
+        if (BN_cmp(sigs, halforder) > 0) {
             // enforce low S values, by negating the value (modulo the order) if above order/2.
-            BN_sub(sig->s, order, sig->s);
+            BIGNUM *news = BN_new();
+            BN_sub(news, order, sigs);
+            ECDSA_SIG_set0(sig, BN_dup(sigr), news);
         }
         BN_CTX_end(ctx);
         BN_CTX_free(ctx);
@@ -247,8 +257,11 @@ public:
         if (sig==NULL)
             return false;
         memset(p64, 0, 64);
-        int nBitsR = BN_num_bits(sig->r);
-        int nBitsS = BN_num_bits(sig->s);
+        const BIGNUM *sigr = NULL;
+        const BIGNUM *sigs = NULL;
+        ECDSA_SIG_get0(sig, &sigr, &sigs);
+        int nBitsR = BN_num_bits(sigr);
+        int nBitsS = BN_num_bits(sigs);
         if (nBitsR <= 256 && nBitsS <= 256) {
             CPubKey pubkey;
             GetPubKey(pubkey, true);
@@ -265,8 +278,8 @@ public:
                 }
             }
             assert(fOk);
-            BN_bn2bin(sig->r,&p64[32-(nBitsR+7)/8]);
-            BN_bn2bin(sig->s,&p64[64-(nBitsS+7)/8]);
+            BN_bn2bin(sigr,&p64[32-(nBitsR+7)/8]);
+            BN_bn2bin(sigs,&p64[64-(nBitsS+7)/8]);
         }
         ECDSA_SIG_free(sig);
         return fOk;
@@ -281,8 +294,11 @@ public:
         if (rec<0 || rec>=3)
             return false;
         ECDSA_SIG *sig = ECDSA_SIG_new();
-        BN_bin2bn(&p64[0],  32, sig->r);
-        BN_bin2bn(&p64[32], 32, sig->s);
+        BIGNUM *sigr = BN_new();
+        BIGNUM *sigs = BN_new();
+        BN_bin2bn(&p64[0],  32, sigr);
+        BN_bin2bn(&p64[32], 32, sigs);
+        ECDSA_SIG_set0(sig, sigr, sigs);
         bool ret = ECDSA_SIG_recover_key_GFp(pkey, sig, (unsigned char*)&hash, sizeof(hash), rec, 0) == 1;
         ECDSA_SIG_free(sig);
         return ret;

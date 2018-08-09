@@ -17,9 +17,9 @@ Then install Homebrew from https://brew.sh
 ## Dependencies
 
 ```
-brew install openssl berkeley-db4 miniupnpc
+brew install berkeley-db4 miniupnpc
 brew link --force berkeley-db4
-brew upgrade openssl
+brew install openssl@1.1
 
 brew install boost@1.55 --c++11 
 brew link boost@1.55 --force

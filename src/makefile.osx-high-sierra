@@ -15,13 +15,13 @@ INCLUDEPATHS= \
  -I"$(CURDIR)"/obj \
  -I"$(DEPSDIR)/include" \
  -I"$(DEPSDIR)/opt/berkeley-db@4" \
- -I"$(DEPSDIR)/opt/openssl/include" \
+ -I"$(DEPSDIR)/opt/openssl@1.1/include" \
  -I"$(DEPSDIR)/opt/boost@1.55/include"
 
 LIBPATHS= \
  -L"$(DEPSDIR)/lib" \
  -L"$(DEPSDIR)/opt/berkeley-db@4/lib" \
- -L"$(DEPSDIR)/opt/openssl/lib" \
+ -L"$(DEPSDIR)/opt/openssl@1.1/lib" \
  -L"$(DEPSDIR)/opt/boost@1.55/lib"
 
 USE_UPNP:=1
@@ -37,8 +37,8 @@ LIBS += \
  $(DEPSDIR)/opt/boost@1.55/lib/libboost_filesystem-mt.a \
  $(DEPSDIR)/opt/boost@1.55/lib/libboost_program_options-mt.a \
  $(DEPSDIR)/opt/boost@1.55/lib/libboost_thread-mt.a \
- $(DEPSDIR)/Cellar/openssl/1.0.2n/lib/libssl.a \
- $(DEPSDIR)/Cellar/openssl/1.0.2n/lib/libcrypto.a \
+ $(DEPSDIR)/opt/openssl@1.1/lib/libssl.a \
+ $(DEPSDIR)/opt/openssl@1.1/lib/libcrypto.a \
  -lz
 else
 LIBS += \
